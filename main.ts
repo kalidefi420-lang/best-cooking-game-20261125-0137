@@ -1,3 +1,10 @@
+// Sizzle & Serve — Kali's Kitchen: our make.fun entry for the "best cooking game" bounty.
+// This program hands the game in: it copies game/ (the full game, a single offline
+// index.html) and screenshots/ (four real renders of the game) from beside this file
+// into /output, then writes /output/dossier.json, the summary the judge reads, using
+// the vendored make.fun library. Run it with MAKEFUN_OUTPUT_DIR set to a scratch dir
+// outside the grader: `mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts`.
+//
 // A working best-game-01 entry (Node 22, standard library only): the game is this directory's
 // game/ folder, plain static files a desktop browser loads offline (game/index.html and its ES
 // modules, no library and no network request), and the program hands it in. It copies game/ and
@@ -12,7 +19,7 @@
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
@@ -39,3 +46,11 @@ writeFileSync(
     game_path_max_bytes: 1000,
   }),
 );
+
+// Build summary: count the screenshots we handed in and say so once, so a failed
+// or empty screenshots/ folder is obvious from the build log instead of silent.
+const shotDir = join(here, 'screenshots');
+const shotCount = existsSync(shotDir)
+  ? readdirSync(shotDir).filter((f) => /\.(png|jpe?g)$/i.test(f)).length
+  : 0;
+console.log(`Sizzle & Serve — Kali's Kitchen: ${shotCount} screenshot(s), dossier at ${join(out, 'dossier.json')}`);
