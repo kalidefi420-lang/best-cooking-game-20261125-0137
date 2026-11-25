@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sizzle &amp; Serve — Kali's Kitchen</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-user-select: none; user-select: none; }
+  :root {
+    --wood: #8b5a2b; --wood2: #a06a35; --cream: #fff7e8; --ink: #2b1d12;
+    --red: #e74c3c; --green: #27ae60; --gold: #f39c12; --teal: #16a085;
+  }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: linear-gradient(180deg, #fdeecf 0%, #f7d9a0 100%);
+    color: var(--ink); min-height: 100vh; padding: 10px;
+  }
+  #game { max-width: 1080px; margin: 0 auto; }
+  header {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;
+    background: #fff; border: 3px solid var(--wood); border-radius: 14px; padding: 10px 14px;
+    box-shadow: 0 4px 0 rgba(0,0,0,.12);
+  }
+  h1 { font-size: 26px; letter-spacing: .5px; }
+  h1 span { color: var(--red); }
+  .hud { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .pill {
+    background: var(--cream); border: 2px solid var(--wood); border-radius: 999px;
+    padding: 6px 12px; font-weight: 700; font-size: 15px; white-space: nowrap;
+  }
+  .pill b { color: var(--red); }
+  #timerBarWrap { height: 12px; background: #eee; border: 2px solid var(--wood); border-radius: 999px; overflow: hidden; margin: 8px 0; }
+  #timerBar { height: 100%; width: 100%; background: linear-gradient(90deg, var(--green), var(--gold)); transition: width .5s linear; }
+  #timerBar.low { background: var(--red); }
+  button { font-family: inherit; cursor: pointer; }
+  .btn {
+    border: 2px solid var(--wood); border-radius: 10px; background: #fff; font-weight: 700;
+    padding: 8px 14px; font-size: 15px; box-shadow: 0 3px 0 rgba(0,0,0,.15);
+  }
+  .btn:active { transform: translateY(2px); box-shadow: none; }
+  .btn.primary { background: var(--green); color: #fff; border-color: #1e8449; }
+  .btn.danger { background: var(--red); color: #fff; border-color: #922b21; }
+  .btn.gold { background: var(--gold); color: #fff; border-color: #9c6d0e; }
+
+  /* Order board */
+  #orders { margin-top: 10px; }
+  #orders h2, .sectionTitle { font-size: 17px; margin-bottom: 6px; }
+  #orderBoard { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; min-height: 118px; }
+  .order {
+    background: #fffbeF; background: #fffdf5; border: 3px dashed var(--gold); border-radius: 12px;
+    padding: 8px 10px; position: relative;
+  }
+  .order.empty { border-style: solid; border-color: #ddd; color: #aaa; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .order .cust { font-size: 22px; }
+  .order .dish { font-weight: 800; font-size: 15px; }
+  .order .price { float: right; color: var(--green); font-weight: 800; }
+  .order .needs { font-size: 22px; letter-spacing: 2px; margin: 4px 0; min-height: 28px; }
+  .order .needs .got { opacity: .35; filter: grayscale(1); text-decoration: line-through; }
+  .patience { height: 8px; background: #eee; border-radius: 99px; overflow: hidden; }
+  .patience > div { height: 100%; background: var(--green); }
+  .patience > div.warn { background: var(--gold); }
+  .patience > div.crit { background: var(--red); }
+  .order .tag { font-size: 11px; font-weight: 700; color: #888; }
+
+  /* Kitchen: stations + counter + plate */
+  #kitchen {
+    margin-top: 10px; background: linear-gradient(180deg, #c98f5a, #a06a35);
+    border: 3px solid var(--wood); border-radius: 14px; padding: 12px;
+    box-shadow: 0 4px 0 rgba(0,0,0,.15);
+  }
+  #stations { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .station {
+    background: var(--cream); border: 3px solid #6e4423; border-radius: 12px;
+    min-height: 104px; padding: 8px; text-align: center; cursor: pointer; position: relative;
+  }
+  .station .icon { font-size: 34px; }
+  .station .name { font-weight: 800; font-size: 14px; }
+  .station .state { font-size: 13px; color: #666; min-height: 18px; }
+  .station.busy { background: #ffe9b8; }
+  .station.done { background: #c8f7c5; border-color: var(--green); animation: pulse 1s infinite; }
+  .station.burnt { background: #f5b7b1; border-color: var(--red); }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(39,174,96,.5);} 50% { box-shadow: 0 0 0 8px rgba(39,174,96,0);} }
+  .prog { height: 10px; background: #e5d5b8; border-radius: 99px; overflow: hidden; margin-top: 6px; }
+  .prog > div { height: 100%; background: var(--teal); width: 0%; }
+  .station.done .prog > div { background: var(--green); }
+  .station.burnt .prog > div { background: var(--red); }
+
+  #counter { margin-top: 12px; }
+  #counter h2 { color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,.3); }
+  #ingredients { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+  .ing {
+    background: #fff; border: 3px solid #6e4423; border-radius: 12px; padding: 8px 4px;
+    text-align: center; cursor: pointer;
+  }
+  .ing:hover { transform: translateY(-2px); background: #fffbeF; background: #fff8e1; }
+  .ing .emoji { font-size: 32px; display: block; }
+  .ing .nm { font-weight: 800; font-size: 13px; display: block; }
+  .ing .prep { font-size: 11px; color: #888; display: block; }
+  .ing .key { display: inline-block; margin-top: 3px; background: #eee; border: 1px solid #bbb; border-radius: 4px; padding: 0 6px; font-size: 11px; font-weight: 700; }
+  .ing.disabled { opacity: .45; cursor: not-allowed; }
+
+  /* Plate / serving */
+  #serveRow { display: flex; gap: 10px; margin-top: 12px; align-items: stretch; }
+  #plate {
+    flex: 1; background: #fff; border: 3px solid #6e4423; border-radius: 12px;
+    min-height: 86px; padding: 8px 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  #plate .plateIcon { font-size: 40px; }
+  #plateItems { font-size: 34px; letter-spacing: 4px; min-height: 40px; }
+  #plateHint { color: #888; font-size: 14px; }
+  #serveRow .btn { font-size: 18px; padding: 10px 20px; }
+  #serveBtn.ready { background: var(--green); color: #fff; animation: pulse 1.2s infinite; }
+  #toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 999px;
+    font-weight: 700; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 50; max-width: 90vw; text-align: center;
+  }
+  #toast.show { opacity: 1; }
+  #howto { margin-top: 10px; background: #fff; border: 2px solid var(--wood); border-radius: 12px; padding: 10px 14px; font-size: 14px; line-height: 1.55; }
+  #howto b { color: var(--red); }
+  kbd { background: #eee; border: 1px solid #bbb; border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font-family: inherit; font-weight: 700; }
+
+  /* Overlays */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(43,29,18,.72); z-index: 100;
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .overlay.hidden { display: none; }
+  .card {
+    background: var(--cream); border: 4px solid var(--wood); border-radius: 18px;
+    max-width: 560px; width: 100%; padding: 24px; text-align: center; box-shadow: 0 12px 40px rgba(0,0,0,.4);
+  }
+  .card h2 { font-size: 30px; margin-bottom: 8px; }
+  .card p { font-size: 15px; line-height: 1.6; margin-bottom: 10px; text-align: left; }
+  .card .big { font-size: 44px; }
+  .card .score { font-size: 22px; font-weight: 800; }
+  .card .btn { font-size: 18px; padding: 12px 26px; margin-top: 8px; }
+  .stars { font-size: 34px; letter-spacing: 4px; }
+  @media (max-width: 760px) {
+    #ingredients { grid-template-columns: repeat(4, 1fr); }
+    #orderBoard, #stations { grid-template-columns: 1fr; }
+    h1 { font-size: 20px; }
+    #serveRow { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div id="game">
+  <header>
+    <h1>🍳 Sizzle &amp; Serve <span>— Kali's Kitchen</span></h1>
+    <div class="hud">
+      <div class="pill">💰 Coins: <b id="score">0</b> / <span id="target">120</span></div>
+      <div class="pill">🍽️ Served: <b id="served">0</b></div>
+      <div class="pill">😡 Walk-outs: <b id="strikes">0</b>/3</div>
+      <div class="pill">⏰ <b id="clock">2:30</b></div>
+      <button class="btn" id="muteBtn" title="Mute (M)">🔊 Sound</button>
+      <button class="btn" id="pauseBtn" title="Pause (P)">⏸ Pause</button>
+      <button class="btn" id="restartBtn" title="Restart (R)">↻ Restart</button>
+    </div>
+  </header>
+  <div id="timerBarWrap"><div id="timerBar"></div></div>
+
+  <section id="orders">
+    <h2>📋 Order Board — serve what customers want before their patience runs out!</h2>
+    <div id="orderBoard"></div>
+  </section>
+
+  <section id="kitchen">
+    <div id="stations">
+      <div class="station" id="station-chop" data-station="chop">
+        <div class="icon">🔪</div><div class="name">Chopping Board</div>
+        <div class="state">Empty — click a veggie to chop it</div>
+        <div class="prog"><div></div></div>
+      </div>
+      <div class="station" id="station-grill" data-station="grill">
+        <div class="icon">🔥</div><div class="name">Grill</div>
+        <div class="state">Empty — click a patty to grill it</div>
+        <div class="prog"><div></div></div>
+      </div>
+      <div class="station" id="station-pot" data-station="pot">
+        <div class="icon">🍲</div><div class="name">Pot</div>
+        <div class="state">Empty — click pasta or an egg to cook it</div>
+        <div class="prog"><div></div></div>
+      </div>
+    </div>
+
+    <div id="counter">
+      <h2>🧺 Ingredients on the counter — click one (or press its number key)</h2>
+      <div id="ingredients"></div>
+    </div>
+
+    <div id="serveRow">
+      <div id="plate">
+        <span class="plateIcon">🍽️</span>
+        <div>
+          <div id="plateItems"></div>
+          <div id="plateHint">Your plate is empty. Build a dish that matches an order, then serve it!</div>
+        </div>
+      </div>
+      <button class="btn gold" id="serveBtn" title="Serve the plate (Space)">✅ Serve Dish</button>
+      <button class="btn danger" id="trashBtn" title="Empty the plate (T)">🗑️ Trash</button>
+    </div>
+  </section>
+
+  <div id="howto">
+    <b>How to play:</b> ① Read an order on the board. ② Click ingredients on the counter — veggies go to the
+    <b>Chopping Board</b>, patties to the <b>Grill</b>, pasta &amp; eggs to the <b>Pot</b>; buns, cheese and sauce go
+    straight on the plate. ③ Click a station when its bar turns green to put the cooked item on your plate —
+    don't let it burn! 🔥 ④ When the plate matches an order exactly, hit <b>Serve Dish</b> (or <kbd>Space</kbd>).
+    Faster service = bigger tip. 💡 Keys: <kbd>1</kbd>–<kbd>8</kbd> ingredients · <kbd>Space</kbd> serve ·
+    <kbd>T</kbd> trash · <kbd>P</kbd> pause · <kbd>M</kbd> mute · <kbd>R</kbd> restart. Earn <b>120 coins</b> before the
+    2:30 shift ends — but 3 walk-outs and the shift is over!
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<div class="overlay" id="startOverlay">
+  <div class="card">
+    <div class="big">🍳👨‍🍳</div>
+    <h2>Sizzle &amp; Serve — Kali's Kitchen</h2>
+    <p>Welcome to the busiest little kitchen in town! Customers are hungry and impatient.
+       Chop, grill and boil your way through their orders, serve the right dish, and earn
+       <b>120 coins</b> before your 2:30 shift ends.</p>
+    <p>🥬 Veggies need chopping &nbsp;•&nbsp; 🥩 Patties need grilling &nbsp;•&nbsp; 🍝 Pasta &amp; eggs need the pot<br>
+       🍞 Bun, 🧀 cheese &amp; 🥫 sauce go straight on the plate.<br>
+       ⚠️ Food left on a station too long <b>burns</b> — click a burnt item to throw it away.<br>
+       😡 If a customer's patience hits zero they walk out. Three walk-outs = game over.</p>
+    <p>Play with mouse or keyboard (<kbd>1</kbd>–<kbd>8</kbd>, <kbd>Space</kbd>, <kbd>T</kbd>, <kbd>P</kbd>, <kbd>M</kbd>).</p>
+    <button class="btn primary" id="startBtn">▶ Start Cooking!</button>
+  </div>
+</div>
+
+<div class="overlay hidden" id="endOverlay">
+  <div class="card">
+    <div class="big" id="endEmoji">🏆</div>
+    <h2 id="endTitle">Shift Complete!</h2>
+    <div class="stars" id="endStars">⭐⭐⭐</div>
+    <p class="score" id="endScore"></p>
+    <p id="endDetail"></p>
+    <button class="btn primary" id="againBtn">↻ Cook Again</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* Sizzle & Serve — Kali's Kitchen. Original game, no external assets, works offline. */
+
+var INGREDIENTS = [
+  { id: "bun",    emoji: "🍞", name: "Bun",    prep: null,   prepTime: 0, station: null },
+  { id: "patty",  emoji: "🥩", name: "Patty",  prep: "Grill", prepTime: 4, station: "grill" },
+  { id: "cheese", emoji: "🧀", name: "Cheese", prep: null,   prepTime: 0, station: null },
+  { id: "lettuce",emoji: "🥬", name: "Lettuce",prep: "Chop", prepTime: 2, station: "chop" },
+  { id: "tomato", emoji: "🍅", name: "Tomato", prep: "Chop", prepTime: 2, station: "chop" },
+  { id: "pasta",  emoji: "🍝", name: "Pasta",  prep: "Boil", prepTime: 5, station: "pot" },
+  { id: "egg",    emoji: "🍳", name: "Egg",    prep: "Fry",  prepTime: 3, station: "pot" },
+  { id: "sauce",  emoji: "🥫", name: "Sauce",  prep: null,   prepTime: 0, station: null }
+];
+var ING = {};
+INGREDIENTS.forEach(function (i) { ING[i.id] = i; });
+
+var RECIPES = [
+  { name: "Classic Burger",  emoji: "🍔", needs: ["bun", "patty", "cheese", "lettuce"], price: 12 },
+  { name: "Garden Salad",    emoji: "🥗", needs: ["lettuce", "tomato", "cheese", "sauce"], price: 10 },
+  { name: "Pasta Alfredo",   emoji: "🍝", needs: ["pasta", "cheese", "sauce"], price: 14 },
+  { name: "Breakfast Plate", emoji: "🍳", needs: ["egg", "tomato", "bun"], price: 11 },
+  { name: "Cheesy Pasta",    emoji: "🍝", needs: ["pasta", "cheese", "tomato"], price: 13 },
+  { name: "Veggie Burger",   emoji: "🍔", needs: ["bun", "lettuce", "tomato", "cheese"], price: 12 }
+];
+var CUSTOMERS = ["🧑", "👩", "👨", "👵", "👴", "🧕", "👦", "👧", "🧑‍🦰", "👱‍♀️"];
+
+var SHIFT_SECONDS = 150, TARGET = 120, MAX_STRIKES = 3, MAX_ORDERS = 3;
+var BURN_GRACE = 4; // seconds after done before it burns
+
+var state = null;
+var timerId = null;
+var toastTimer = null;
+var audioCtx = null, muted = false;
+
+function newState() {
+  return {
+    running: false, paused: false, over: false,
+    timeLeft: SHIFT_SECONDS, score: 0, served: 0, strikes: 0,
+    orders: [], plate: [],
+    stations: { chop: null, grill: null, pot: null }, // {ingId, progress, done, burnt}
+    nextOrderIn: 1.5, spawnEvery: 14, orderId: 0
+  };
+}
+
+function $(id) { return document.getElementById(id); }
+
+/* ---------- sound (WebAudio, no files) ---------- */
+function beep(freq, dur, type, vol) {
+  if (muted) return;
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type || "sine"; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol || 0.12, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + dur);
+  } catch (e) { /* audio unavailable: play silently */ }
+}
+function sfx(kind) {
+  if (kind === "click") beep(600, 0.07, "square", 0.06);
+  else if (kind === "done") { beep(880, 0.1, "sine", 0.12); setTimeout(function () { beep(1174, 0.12, "sine", 0.12); }, 90); }
+  else if (kind === "serve") { beep(523, 0.1, "sine", 0.12); setTimeout(function () { beep(659, 0.1, "sine", 0.12); }, 90); setTimeout(function () { beep(784, 0.16, "sine", 0.12); }, 180); }
+  else if (kind === "bad") beep(180, 0.25, "sawtooth", 0.1);
+  else if (kind === "walkout") { beep(300, 0.2, "sawtooth", 0.1); setTimeout(function () { beep(200, 0.3, "sawtooth", 0.1); }, 150); }
+}
+
+/* ---------- toast ---------- */
+function toast(msg) {
+  var t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { t.classList.remove("show"); }, 2200);
+}
+
+/* ---------- orders ---------- */
+function spawnOrder() {
+  var r = RECIPES[Math.floor(Math.random() * RECIPES.length)];
+  var patience = Math.max(28, 48 - state.served * 1.5); // gets tenser as you serve more
+  state.orders.push({
+    id: ++state.orderId, recipe: r,
+    customer: CUSTOMERS[Math.floor(Math.random() * CUSTOMERS.length)],
+    patience: patience, maxPatience: patience
+  });
+  renderOrders();
+}
+function multisetEquals(a, b) {
+  if (a.length !== b.length) return false;
+  var ca = {}, cb = {};
+  a.forEach(function (x) { ca[x] = (ca[x] || 0) + 1; });
+  b.forEach(function (x) { cb[x] = (cb[x] || 0) + 1; });
+  return Object.keys(ca).every(function (k) { return ca[k] === cb[k]; });
+}
+function plateMatchesOrder(order) {
+  return multisetEquals(state.plate, order.recipe.needs);
+}
+function matchingOrder() {
+  for (var i = 0; i < state.orders.length; i++) {
+    if (plateMatchesOrder(state.orders[i])) return state.orders[i];
+  }
+  return null;
+}
+
+/* ---------- cooking actions ---------- */
+function addIngredient(ingId) {
+  if (!state.running || state.paused || state.over) return;
+  var ing = ING[ingId];
+  if (!ing) return;
+  if (ing.station === null) {
+    state.plate.push(ingId);
+    sfx("click"); renderPlate(); renderOrders();
+    return;
+  }
+  var st = state.stations[ing.station];
+  if (st) { toast("That station is busy — wait or collect it first!"); sfx("bad"); return; }
+  state.stations[ing.station] = { ingId: ingId, progress: 0, done: false, burnt: false };
+  sfx("click"); renderStations();
+}
+function clickStation(stationId) {
+  if (!state.running || state.paused || state.over) return;
+  var st = state.stations[stationId];
+  if (!st) return;
+  if (st.burnt) {
+    toast("Burnt " + ING[st.ingId].name + " thrown away! 🔥");
+    state.stations[stationId] = null; sfx("bad"); renderStations(); return;
+  }
+  if (!st.done) { toast("Still cooking… wait for the green bar!"); return; }
+  state.plate.push(st.ingId);
+  state.stations[stationId] = null;
+  sfx("done"); renderStations(); renderPlate(); renderOrders();
+}
+function serveDish() {
+  if (!state.running || state.paused || state.over) return;
+  if (state.plate.length === 0) { toast("Your plate is empty!"); return; }
+  var order = matchingOrder();
+  if (!order) {
+    state.score = Math.max(0, state.score - 3);
+    toast("Wrong dish! No one ordered that. −3 coins 😖");
+    sfx("bad"); state.plate = []; renderAll(); return;
+  }
+  var tip = Math.round((order.patience / order.maxPatience) * 5);
+  var earned = order.recipe.price + tip;
+  state.score += earned; state.served++;
+  state.orders = state.orders.filter(function (o) { return o.id !== order.id; });
+  state.plate = [];
+  toast("Served " + order.recipe.name + "! +" + earned + " coins (incl. " + tip + " tip) 🎉");
+  sfx("serve"); renderAll();
+}
+function trashPlate() {
+  if (!state.running || state.paused || state.over) return;
+  if (state.plate.length === 0) return;
+  state.plate = []; sfx("click"); renderPlate(); renderOrders();
+  toast("Plate cleared.");
+}
+
+/* ---------- game loop ---------- */
+function tick() {
+  if (!state.running || state.paused || state.over) return;
+  state.timeLeft -= 0.5;
+  // stations progress
+  Object.keys(state.stations).forEach(function (sid) {
+    var st = state.stations[sid];
+    if (!st || st.burnt) return;
+    var ing = ING[st.ingId];
+    st.progress += 0.5;
+    if (st.progress >= ing.prepTime && !st.done) { st.done = true; sfx("done"); }
+    else if (st.done && st.progress >= ing.prepTime + BURN_GRACE) { st.burnt = true; toast("Something burnt on the " + sid + "! 🔥"); sfx("bad"); }
+  });
+  // orders patience
+  var walked = [];
+  state.orders.forEach(function (o) { o.patience -= 0.5; if (o.patience <= 0) walked.push(o); });
+  walked.forEach(function (o) {
+    state.orders = state.orders.filter(function (x) { return x.id !== o.id; });
+    state.strikes++;
+    toast("A customer walked out! 😡 (" + state.strikes + "/" + MAX_STRIKES + ")");
+    sfx("walkout");
+  });
+  // spawn orders
+  state.nextOrderIn -= 0.5;
+  if (state.nextOrderIn <= 0 && state.orders.length < MAX_ORDERS) {
+    spawnOrder();
+    state.spawnEvery = Math.max(8, 14 - state.served * 0.4);
+    state.nextOrderIn = state.spawnEvery;
+  }
+  renderHUD(); renderOrders(); renderStations();
+  if (state.strikes >= MAX_STRIKES) return endGame(false, "Three customers walked out — the lunch rush beat you!");
+  if (state.timeLeft <= 0) {
+    state.timeLeft = 0;
+    if (state.score >= TARGET) endGame(true, "You hit the target with time to spare!");
+    else endGame(false, "Time's up! You needed " + TARGET + " coins but earned " + state.score + ".");
+  }
+}
+
+function endGame(won, reason) {
+  state.over = true; state.running = false;
+  clearInterval(timerId);
+  var stars = won ? (state.score >= TARGET + 60 ? 3 : state.score >= TARGET + 25 ? 2 : 1) : 0;
+  $("endEmoji").textContent = won ? "🏆" : "😢";
+  $("endTitle").textContent = won ? "Shift Complete — You Did It!" : "Shift Over…";
+  $("endStars").textContent = won ? "⭐".repeat(stars) + "☆".repeat(3 - stars) : "💪 Try again!";
+  $("endScore").textContent = "Coins: " + state.score + " / " + TARGET + "  •  Dishes served: " + state.served + "  •  Walk-outs: " + state.strikes;
+  $("endDetail").textContent = reason + (won ? " The kitchen is yours, chef!" : " Tip: start the next order's chopping while the grill is busy.");
+  $("endOverlay").classList.remove("hidden");
+  if (won) sfx("serve"); else sfx("walkout");
+}
+
+/* ---------- rendering ---------- */
+function fmtTime(s) {
+  s = Math.max(0, Math.ceil(s));
+  return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+}
+function renderHUD() {
+  $("score").textContent = state.score;
+  $("served").textContent = state.served;
+  $("strikes").textContent = state.strikes;
+  $("clock").textContent = fmtTime(state.timeLeft);
+  var bar = $("timerBar");
+  bar.style.width = (state.timeLeft / SHIFT_SECONDS * 100) + "%";
+  bar.classList.toggle("low", state.timeLeft < 30);
+}
+function renderOrders() {
+  var board = $("orderBoard");
+  board.innerHTML = "";
+  state.orders.forEach(function (o) {
+    var div = document.createElement("div");
+    div.className = "order";
+    var pct = Math.max(0, o.patience / o.maxPatience * 100);
+    var cls = pct > 50 ? "" : pct > 25 ? "warn" : "crit";
+    var needsHtml = o.recipe.needs.map(function (id) {
+      var onPlate = state.plate.indexOf(id) !== -1;
+      return '<span class="' + (onPlate ? "got" : "") + '">' + ING[id].emoji + "</span>";
+    }).join("");
+    div.innerHTML =
+      '<span class="price">$' + o.recipe.price + '</span>' +
+      '<span class="cust">' + o.customer + '</span> ' +
+      '<span class="dish">' + o.recipe.emoji + " " + o.recipe.name + "</span>" +
+      '<div class="needs">' + needsHtml + "</div>" +
+      '<div class="patience"><div class="' + cls + '" style="width:' + pct + '%"></div></div>' +
+      '<div class="tag">Patience ' + Math.ceil(o.patience) + "s • ticked items are already on your plate</div>";
+    board.appendChild(div);
+  });
+  for (var i = state.orders.length; i < MAX_ORDERS; i++) {
+    var e = document.createElement("div");
+    e.className = "order empty"; e.textContent = "Waiting for the next customer…";
+    board.appendChild(e);
+  }
+}
+function renderStations() {
+  ["chop", "grill", "pot"].forEach(function (sid) {
+    var el = $("station-" + sid), st = state ? state.stations[sid] : null;
+    var bar = el.querySelector(".prog > div"), label = el.querySelector(".state");
+    el.classList.remove("busy", "done", "burnt");
+    if (!st) {
+      bar.style.width = "0%";
+      label.textContent = sid === "chop" ? "Empty — click a veggie to chop it"
+        : sid === "grill" ? "Empty — click a patty to grill it"
+        : "Empty — click pasta or an egg to cook it";
+      return;
+    }
+    var ing = ING[st.ingId];
+    var pct = Math.min(100, st.progress / ing.prepTime * 100);
+    bar.style.width = pct + "%";
+    if (st.burnt) { el.classList.add("burnt"); label.textContent = "🔥 Burnt " + ing.name + "! Click to throw it away."; }
+    else if (st.done) { el.classList.add("done"); label.textContent = "✅ " + ing.emoji + " " + ing.name + " ready! Click to plate it."; }
+    else { el.classList.add("busy"); label.textContent = ing.emoji + " " + ing.name + " " + ing.prep.toLowerCase() + "ing… " + Math.ceil(ing.prepTime - st.progress) + "s"; }
+  });
+}
+function renderPlate() {
+  $("plateItems").textContent = state.plate.map(function (id) { return ING[id].emoji; }).join(" ");
+  $("plateHint").textContent = state.plate.length === 0
+    ? "Your plate is empty. Build a dish that matches an order, then serve it!"
+    : state.plate.map(function (id) { return ING[id].name; }).join(" + ") + " — on the plate.";
+  var match = matchingOrder();
+  $("serveBtn").classList.toggle("ready", !!match);
+  $("serveBtn").textContent = match ? "✅ Serve " + match.recipe.name + "!" : "✅ Serve Dish";
+}
+function renderIngredients() {
+  var wrap = $("ingredients");
+  wrap.innerHTML = "";
+  INGREDIENTS.forEach(function (ing, idx) {
+    var b = document.createElement("button");
+    b.className = "ing"; b.type = "button";
+    b.innerHTML = '<span class="emoji">' + ing.emoji + '</span>' +
+      '<span class="nm">' + ing.name + "</span>" +
+      '<span class="prep">' + (ing.prep ? ing.prep + " · " + ing.prepTime + "s" : "Ready to plate") + "</span>" +
+      '<span class="key">' + (idx + 1) + "</span>";
+    b.addEventListener("click", function () { addIngredient(ing.id); });
+    wrap.appendChild(b);
+  });
+}
+function renderAll() { renderHUD(); renderOrders(); renderStations(); renderPlate(); }
+
+/* ---------- start / pause / restart ---------- */
+function startGame() {
+  state = newState();
+  state.running = true;
+  $("startOverlay").classList.add("hidden");
+  $("endOverlay").classList.add("hidden");
+  $("pauseBtn").textContent = "⏸ Pause";
+  clearInterval(timerId);
+  timerId = setInterval(tick, 500);
+  spawnOrder();
+  renderAll();
+  toast("First order is in — get cooking! 🍳");
+}
+function togglePause() {
+  if (!state || state.over || !state.running && !state.paused) return;
+  state.paused = !state.paused;
+  $("pauseBtn").textContent = state.paused ? "▶ Resume" : "⏸ Pause";
+  toast(state.paused ? "Paused. Take a breath, chef. ☕" : "Back to work! 🔥");
+}
+function toggleMute() {
+  muted = !muted;
+  $("muteBtn").textContent = muted ? "🔇 Muted" : "🔊 Sound";
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  state = newState();
+  renderIngredients(); renderAll();
+  $("startBtn").addEventListener("click", startGame);
+  $("againBtn").addEventListener("click", startGame);
+  $("serveBtn").addEventListener("click", serveDish);
+  $("trashBtn").addEventListener("click", trashPlate);
+  $("pauseBtn").addEventListener("click", togglePause);
+  $("restartBtn").addEventListener("click", function () { if (state) startGame(); });
+  $("muteBtn").addEventListener("click", toggleMute);
+  ["chop", "grill", "pot"].forEach(function (sid) {
+    $("station-" + sid).addEventListener("click", function () { clickStation(sid); });
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key >= "1" && e.key <= "8") addIngredient(INGREDIENTS[Number(e.key) - 1].id);
+    else if (e.key === " ") { e.preventDefault(); serveDish(); }
+    else if (e.key === "t" || e.key === "T") trashPlate();
+    else if (e.key === "p" || e.key === "P") togglePause();
+    else if (e.key === "m" || e.key === "M") toggleMute();
+    else if (e.key === "r" || e.key === "R") { if (state && state.running) startGame(); }
+    else if (e.key === "Enter" && !$("startOverlay").classList.contains("hidden")) startGame();
+  });
+});
+</script>
+</body>
+</html>
